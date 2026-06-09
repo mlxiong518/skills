@@ -43,6 +43,14 @@ export interface BlobSkill extends Skill {
 
 const DOWNLOAD_BASE_URL = process.env.SKILLS_DOWNLOAD_URL || 'https://skills.sh';
 
+// Repos that self-host their downloads on the blob fast-path
+export const BLOB_ALLOWED_REPOS: Record<string, { downloadUrl: (slug: string) => string }> = {
+  'zapier/connectors': {
+    downloadUrl: (slug) =>
+      `https://connectors-skills.zapier.com/download/${encodeURIComponent(slug)}/snapshot.json`,
+  },
+};
+
 /** Timeout for individual HTTP fetches (ms) */
 const FETCH_TIMEOUT = 10_000;
 
@@ -372,7 +380,10 @@ async function fetchSkillDownload(
 ): Promise<SkillDownloadResponse | null> {
   try {
     const [owner, repo] = source.split('/');
-    const url = `${DOWNLOAD_BASE_URL}/api/download/${encodeURIComponent(owner!)}/${encodeURIComponent(repo!)}/${encodeURIComponent(slug)}`;
+    const defaultUrl = `${DOWNLOAD_BASE_URL}/api/download/${encodeURIComponent(owner!)}/${encodeURIComponent(repo!)}/${encodeURIComponent(slug)}`;
+    // Self-hosted repos build their own URL; otherwise fall back to the default.
+    const selfHosted = BLOB_ALLOWED_REPOS[source.toLowerCase()]?.downloadUrl(slug);
+    const url = selfHosted ?? defaultUrl;
     const response = await fetch(url, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT),
     });

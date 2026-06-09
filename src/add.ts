@@ -70,6 +70,7 @@ import { addSkillToLocalLock, computeSkillFolderHash } from './local-lock.ts';
 import type { Skill, AgentType } from './types.ts';
 import {
   tryBlobInstall,
+  BLOB_ALLOWED_REPOS,
   getSkillFolderHashFromTree,
   fetchRepoTree,
   type BlobSkill,
@@ -1047,12 +1048,15 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
         fullDepth: options.fullDepth,
       });
     } else if (parsed.type === 'github' && !options.fullDepth) {
-      // Try blob-based fast install for GitHub sources
-      // Only enabled for allowlisted orgs; skip for --full-depth
+      // Try the blob-based fast install for GitHub sources; skip for --full-depth.
+      // Eligible per repo (a BLOB_ALLOWED_REPOS entry = self-hosted download URL) or
+      // per owner (BLOB_ALLOWED_OWNERS = all their repos, skills.sh-hosted).
       const BLOB_ALLOWED_OWNERS = ['vercel', 'vercel-labs', 'heygen-com'];
       const ownerRepo = getOwnerRepo(parsed);
       const owner = ownerRepo?.split('/')[0]?.toLowerCase();
-      if (ownerRepo && owner && BLOB_ALLOWED_OWNERS.includes(owner)) {
+      const isSelfHostedRepo =
+        !!ownerRepo && Object.hasOwn(BLOB_ALLOWED_REPOS, ownerRepo.toLowerCase());
+      if (ownerRepo && owner && (isSelfHostedRepo || BLOB_ALLOWED_OWNERS.includes(owner))) {
         spinner.start('Fetching skills...');
         blobResult = await tryBlobInstall(ownerRepo, {
           subpath: parsed.subpath,
